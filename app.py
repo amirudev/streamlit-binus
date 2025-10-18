@@ -1,10 +1,17 @@
 import streamlit as st
 import numpy as np
-import cv2
 from PIL import Image
 import tensorflow as tf
 import os
 from pathlib import Path
+
+# Try to import OpenCV, fallback to PIL if not available
+try:
+    import cv2
+    HAS_OPENCV = True
+except ImportError:
+    HAS_OPENCV = False
+    st.warning("⚠️ OpenCV not available, using PIL for image processing")
 
 # Page configuration
 st.set_page_config(
@@ -99,20 +106,18 @@ def load_model():
 def preprocess_image(image, target_size=(224, 224)):
     """Preprocess the uploaded image"""
     try:
-        # Convert PIL to numpy array
-        img_array = np.array(image)
+        # Convert to RGB if needed (handle RGBA, L, etc.)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
         
-        # Convert to RGB if needed
-        if len(img_array.shape) == 3 and img_array.shape[2] == 4:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
-        elif len(img_array.shape) == 3 and img_array.shape[2] == 3:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+        # Resize image using PIL
+        image_resized = image.resize(target_size, Image.Resampling.LANCZOS)
         
-        # Resize image
-        img_resized = cv2.resize(img_array, target_size)
+        # Convert to numpy array
+        img_array = np.array(image_resized)
         
         # Normalize pixel values to [0, 1]
-        img_normalized = img_resized.astype(np.float32) / 255.0
+        img_normalized = img_array.astype(np.float32) / 255.0
         
         # Add batch dimension
         img_batch = np.expand_dims(img_normalized, axis=0)
