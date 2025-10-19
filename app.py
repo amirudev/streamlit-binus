@@ -321,7 +321,7 @@ def main():
         
         with col1:
             st.markdown("#### Original Image")
-            st.image(image, caption="Uploaded Image", use_column_width=True)
+            st.image(image, caption="Uploaded Image", use_container_width=True)
         
         with col2:
             st.markdown("#### Preprocessed Image")
@@ -332,7 +332,7 @@ def main():
             if processed_image is not None:
                 # Display preprocessed image
                 display_img = processed_image[0]  # Remove batch dimension
-                st.image(display_img, caption="Preprocessed Image", use_column_width=True)
+                st.image(display_img, caption="Preprocessed Image", use_container_width=True)
                 
                 # Make prediction
                 with st.spinner("Analyzing image..."):
