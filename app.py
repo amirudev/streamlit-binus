@@ -4,6 +4,10 @@ from PIL import Image
 import tensorflow as tf
 import os
 from pathlib import Path
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import time
 
 # Try to import OpenCV, fallback to PIL if not available
 try:
@@ -15,58 +19,128 @@ except ImportError:
 
 # Page configuration
 st.set_page_config(
-    page_title="Image Classification App",
-    page_icon="🖼️",
-    layout="wide"
+    page_title="Image Classifier",
+    page_icon="📷",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UI
+# Simple, clean CSS
 st.markdown("""
 <style>
+    /* Simple styling - no fancy gradients or effects */
+    .main .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        max-width: 1000px;
+    }
+    
+    /* Clean header */
     .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #333;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 0.5rem;
+        border-bottom: 2px solid #ddd;
+        padding-bottom: 0.5rem;
     }
-    .description-box {
-        background-color: #f0f2f6;
+    
+    .sub-header {
+        font-size: 1rem;
+        color: #666;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Simple cards */
+    .custom-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
         padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 2rem;
+        margin: 1rem 0;
     }
-    .prediction-box {
-        background-color: #e8f4fd;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
-    }
-    .confidence-bar {
-        background-color: #1f77b4;
-        height: 20px;
-        border-radius: 10px;
+    
+    .info-card {
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 0.75rem;
         margin: 0.5rem 0;
     }
+    
+    /* Simple prediction result */
+    .prediction-result {
+        background: #007bff;
+        color: white;
+        border-radius: 4px;
+        padding: 1rem;
+        text-align: center;
+        margin: 1rem 0;
+    }
+    
+    .prediction-result h2 {
+        color: white;
+        margin: 0.25rem 0;
+        font-size: 1.5rem;
+    }
+    
+    .prediction-result h3 {
+        color: rgba(255,255,255,0.9);
+        margin: 0;
+        font-size: 1rem;
+        font-weight: normal;
+    }
+    
+    /* Simple prediction items */
+    .prediction-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 0.25rem 0;
+    }
+    
+    .prediction-item:first-child {
+        background: #f8f9fa;
+        border-left: 3px solid #007bff;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown('<h1 class="main-header">🖼️ Image Classification App</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">Image Classifier</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Upload an image to classify it using machine learning</p>', unsafe_allow_html=True)
 
-# Project description
+# Sidebar
+with st.sidebar:
+    st.markdown("### Model Information")
+    
+    # Model stats will be populated here
+    model_stats_container = st.container()
+    
+    st.markdown("---")
+    
+    st.markdown("### Supported Classes")
+    
+    # Class labels will be displayed here
+    classes_container = st.container()
+
+# Simple description
 st.markdown("""
-<div class="description-box">
-    <h3>📋 About This Project</h3>
-    <p>This application uses a pre-trained deep learning model to classify uploaded images. 
-    The model was trained using Aqsha's model_best and can predict the category of your uploaded images 
-    with confidence scores.</p>
-    <p><strong>Features:</strong></p>
-    <ul>
-        <li>Upload and classify images in real-time</li>
-        <li>View prediction results with confidence scores</li>
-        <li>Automatic image preprocessing and normalization</li>
-        <li>User-friendly interface</li>
-    </ul>
+<div class="custom-card">
+    <p style="text-align: center; margin: 0;">
+        Upload an image below to classify it. The model can identify 10 different object categories.
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -143,6 +217,72 @@ def get_class_labels():
         "truck"        # Class 9
     ]
 
+def create_confidence_chart(predictions, class_labels, top_n=5):
+    """Create a simple confidence chart"""
+    # Get top N predictions
+    top_indices = np.argsort(predictions[0])[-top_n:][::-1]
+    top_confidences = predictions[0][top_indices]
+    top_labels = [class_labels[i].title() for i in top_indices]
+    
+    # Create simple horizontal bar chart
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        y=top_labels,
+        x=top_confidences,
+        orientation='h',
+        marker=dict(color='#007bff'),
+        text=[f'{conf:.1%}' for conf in top_confidences],
+        textposition='auto',
+        hovertemplate='<b>%{y}</b><br>Confidence: %{x:.1%}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title="Confidence Scores",
+        xaxis_title="Confidence",
+        yaxis_title="",
+        height=300,
+        margin=dict(l=0, r=0, t=40, b=0),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+    
+    fig.update_xaxes(range=[0, 1], tickformat='.0%')
+    
+    return fig
+
+def create_confidence_gauge(confidence):
+    """Create a simple confidence gauge"""
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = confidence * 100,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Confidence", 'font': {'size': 16, 'color': '#2d3748'}},
+        gauge = {
+            'axis': {'range': [None, 100], 'tickcolor': '#64748b'},
+            'bar': {'color': "#667eea"},
+            'steps': [
+                {'range': [0, 50], 'color': "#f1f5f9"},
+                {'range': [50, 80], 'color': "#e2e8f0"}
+            ],
+            'threshold': {
+                'line': {'color': "#667eea", 'width': 3},
+                'thickness': 0.8,
+                'value': 90
+            }
+        }
+    ))
+    
+    fig.update_layout(
+        height=220,
+        margin=dict(l=10, r=10, t=40, b=10),
+        paper_bgcolor='white',
+        font=dict(family="Arial, sans-serif", size=12)
+    )
+    
+    return fig
+
 def main():
     # Load model
     model = load_model()
@@ -150,43 +290,41 @@ def main():
     if model is None:
         st.stop()
     
-    # Display model info
-    col1, col2 = st.columns(2)
+    # Update sidebar with model information
+    with model_stats_container:
+        st.markdown(f"**Input Shape:** {model.input_shape}")
+        st.markdown(f"**Output Shape:** {model.output_shape}")
+        st.markdown(f"**Parameters:** {model.count_params():,}")
+        st.markdown(f"**Layers:** {len(model.layers)}")
     
-    with col1:
-        st.info(f"📊 Model Input Shape: {model.input_shape}")
-        st.info(f"📊 Model Output Shape: {model.output_shape}")
+    # Display class labels in sidebar
+    with classes_container:
+        class_labels = get_class_labels()
+        for i, label in enumerate(class_labels):
+            st.markdown(f"{i}. {label.title()}")
     
-    with col2:
-        st.info(f"📊 Total Parameters: {model.count_params():,}")
-        st.info(f"📊 Model Layers: {len(model.layers)}")
+    # File upload section
+    st.markdown("### Upload Image")
     
-    st.divider()
-    
-    # File upload
-    st.subheader("📤 Upload Image")
     uploaded_file = st.file_uploader(
-        "Choose an image file",
+        "Choose an image file to classify",
         type=['png', 'jpg', 'jpeg', 'bmp', 'tiff'],
         help="Upload an image file to classify"
     )
     
     if uploaded_file is not None:
         # Display uploaded image
-        col1, col2 = st.columns(2)
+        image = Image.open(uploaded_file)
+        
+        # Create main layout
+        col1, col2 = st.columns([1, 1])
         
         with col1:
-            st.subheader("📷 Original Image")
-            image = Image.open(uploaded_file)
+            st.markdown("#### Original Image")
             st.image(image, caption="Uploaded Image", use_column_width=True)
-            
-            # Image info
-            st.write(f"**Image Size:** {image.size}")
-            st.write(f"**Image Mode:** {image.mode}")
-            st.write(f"**File Size:** {uploaded_file.size:,} bytes")
         
         with col2:
-            st.subheader("🔍 Preprocessed Image")
+            st.markdown("#### Preprocessed Image")
             
             # Preprocess image
             processed_image = preprocess_image(image)
@@ -197,7 +335,7 @@ def main():
                 st.image(display_img, caption="Preprocessed Image", use_column_width=True)
                 
                 # Make prediction
-                with st.spinner("🔄 Making prediction..."):
+                with st.spinner("Analyzing image..."):
                     try:
                         predictions = model.predict(processed_image, verbose=0)
                         
@@ -208,32 +346,42 @@ def main():
                         top_prediction_idx = np.argmax(predictions[0])
                         top_confidence = predictions[0][top_prediction_idx]
                         
-                        # Display results
-                        st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
-                        st.subheader("🎯 Prediction Results")
+                        # Main prediction result
+                        st.markdown(f"""
+                        <div class="prediction-result">
+                            <h2>{class_labels[top_prediction_idx].title()}</h2>
+                            <h3>{top_confidence*100:.1f}% Confidence</h3>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        st.write(f"**Predicted Class:** {class_labels[top_prediction_idx]}")
-                        st.write(f"**Confidence:** {top_confidence:.4f} ({top_confidence*100:.2f}%)")
-                        
-                        # Confidence bar
-                        confidence_percent = top_confidence * 100
-                        st.write(f"**Confidence Level:**")
+                        # Simple confidence bar
                         st.progress(float(top_confidence))
                         
-                        # Top 5 predictions
-                        st.subheader("📈 Top 5 Predictions")
+                        # Top 5 predictions in a simple list
+                        st.markdown("#### Top 5 Predictions")
                         top_5_indices = np.argsort(predictions[0])[-5:][::-1]
                         
                         for i, idx in enumerate(top_5_indices):
                             confidence = predictions[0][idx]
-                            st.write(f"{i+1}. **{class_labels[idx]}**: {confidence:.4f} ({confidence*100:.2f}%)")
+                            st.markdown(f"""
+                            <div class="prediction-item">
+                                <div>
+                                    <strong>{i+1}. {class_labels[idx].title()}</strong>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="font-weight: bold;">{confidence*100:.1f}%</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        # Optional: Show chart if user wants more details
+                        if st.checkbox("Show detailed chart"):
+                            st.plotly_chart(create_confidence_chart(predictions, class_labels), use_container_width=True)
                         
                     except Exception as e:
-                        st.error(f"❌ Error making prediction: {str(e)}")
+                        st.error(f"Error making prediction: {str(e)}")
             else:
-                st.error("❌ Failed to preprocess image")
+                st.error("Failed to preprocess image")
 
 if __name__ == "__main__":
     main()
